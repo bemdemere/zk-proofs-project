@@ -1,0 +1,25 @@
+// ZoKrates program: three_coloring.zok
+const u32 N = 3;        // number of nodes
+const u32 E = 3;        // number of edges
+
+// The ZoKrates main function
+def main(private u32[N] colors, u32[E][2] edges) -> bool {
+    // each color must be 0, 1, or 2
+    for u32 i in 0..N {
+        bool isColor0 = colors[i] == 0;
+        bool isColor1 = colors[i] == 1;
+        bool isColor2 = colors[i] == 2;
+        // at least one of the three conditions must be true:
+        assert(isColor0 || isColor1 || isColor2);
+    }
+
+    // no adjacent nodes share the same color
+    for u32 j in 0..E {
+        u32 u = edges[j][0];    // index of first node of edge
+        u32 v = edges[j][1];    // index of second node
+        // Check that the colors differ
+        assert(colors[u] != colors[v]);
+    }
+
+    return true; // If all asserts pass, return true (authentication success)
+}

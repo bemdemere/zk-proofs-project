@@ -1,0 +1,95 @@
+# **Zero-Knowledge Authentication Using Graph 3-Coloring**
+
+## **Project Description**
+This project implements a **zero-knowledge proof (ZKP) authentication system** using the **Graph 3-Coloring problem** as the authentication challenge.
+
+- Users authenticate by proving they **know a valid coloring** for a predefined graph **without revealing the coloring itself**.
+- The system uses **ZoKrates** to generate zkSNARK proofs, allowing verification without exposing the user’s secret credentials.
+- The backend is implemented in **Flask**, handling proof verification and user authentication.
+- The frontend will provide a **web-based login interface** for users to authenticate using zero-knowledge proofs.
+
+## **Project Structure**
+```
+zk-auth/
+│── server/                  # Backend server handling authentication & proof verification
+│   ├── app.py               # Flask server handling API requests
+│   ├── verifier.py          # Calls ZoKrates to verify proofs
+│   ├── graph_data.json      # store user-graph mappings (predefined graphs for authentication)
+│── client/                  # Frontend 
+│── test/                    # Unit tests 
+│── zokrates-circuit/        system
+│   ├── authcircuit.zok       # circuit for 3-coloring proof 
+│── README.md                # Documentation (this file)
+```
+
+## **System Design**
+### **What the Code Does So Far**
+**Backend (Flask Server)**
+- Loads predefined **graphs per user** from `graph_data.json`.
+- Accepts authentication requests where users submit:
+  - **Username** (public identifier).
+  - **Secret coloring** (private, proves authentication).
+- Uses **ZoKrates** to:
+  1. Compute a **witness** (hidden proof data).
+  2. Generate a **zkSNARK proof**.
+  3. Verify the proof against the user’s assigned graph.
+- Responds with **authentication success/failure** based on proof verification.
+
+**ZoKrates Circuit** (`authcircuit.zok`)
+- Defines the **graph 3-coloring problem** as an arithmetic circuit.
+- Ensures that the user’s coloring **satisfies** the graph constraints:
+  - **Each node gets a valid color (0,1,2).**
+  - **Adjacent nodes do not share the same color.**
+
+### **TODOs**
+**Move Zokrates logic to the client side to avoid sending coloring**
+**Frontend (Web Interface)**
+- Build a **web-based login page** where users enter credentials and authenticate.
+- Allow users to **interact seamlessly** with the backend.
+
+**Automated Testing & Deployment**
+- Add **unit tests** in the `test/` directory to validate proof generation & verification.
+- Deploy the server and frontend using **Docker/Kubernetes** for scalability.
+
+## **How to Run the Project**
+### **1. Install Dependencies**
+```bash
+pip install flask
+```
+
+### **2. Start the Server**
+```bash
+python server/app.py
+```
+
+### **3. Authenticate a User (Example)**
+Send a **POST request** to the server:
+```bash
+curl -X POST http://127.0.0.1:5000/login \
+     -H "Content-Type: application/json" \
+     -d '{
+         "username": "alice",
+         "colors": [0, 1, 2]
+     }'
+```
+
+### **4. Expected Output**
+If authentication is successful:
+```json
+{
+    "success": true,
+    "message": "Authentication successful (ZKP verified)!"
+}
+```
+If authentication fails:
+```json
+{
+    "success": false,
+    "message": "Authentication failed (invalid proof)!"
+}
+```
+
+## **Next Steps**
+1. **Complete the frontend UI** for user authentication.
+2. **Enable client-side proof generation** for enhanced privacy.
+3. **Deploy on cloud infrastructure** and optimize for performance.
