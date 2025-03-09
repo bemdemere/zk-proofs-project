@@ -3,7 +3,7 @@
 ## **Project Description**
 This project implements a **zero-knowledge proof (ZKP) authentication system** using the **Graph 3-Coloring problem** as the authentication challenge.
 
-- Users authenticate by proving they **know a valid coloring** for a predefined graph **without revealing the coloring itself**.
+- UsersS authenticate by proving they **know a valid coloring** for a predefined graph **without revealing the coloring itself**.
 - The system uses **ZoKrates** to generate zkSNARK proofs, allowing verification without exposing the user’s secret credentials.
 - The backend is implemented in **Flask**, handling proof verification and user authentication.
 - The frontend will provide a **web-based login interface** for users to authenticate using zero-knowledge proofs.
@@ -43,6 +43,7 @@ zk-auth/
 
 ### **TODOs**
 **Move Zokrates logic to the client side to avoid sending coloring**
+
 **Frontend (Web Interface)**
 - Build a **web-based login page** where users enter credentials and authenticate.
 - Allow users to **interact seamlessly** with the backend.

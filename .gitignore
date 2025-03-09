@@ -1,0 +1,12 @@
+# Ignore virtual environments
+zkenv/
+.zkenv/
+
+# Ignore common Python cache files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Ignore log files
+*.log

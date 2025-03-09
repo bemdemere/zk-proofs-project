@@ -1,0 +1,28 @@
+import "hashes/sha256/512bitPacked" as sha256packed;
+//TODO: call this to create acircuit from graph and hashinput
+def main(
+    field[N] colors,       // Private: User's claimed 3-coloring
+    field[2*M] edges,       // Public: Graph edges (formatted order)
+    field[2] hash_input,   // Public: User’s commitment hash
+    field[2] stored_hash   // Public: Server-stored hash
+) {
+    // Ensure valid colors (must be 0, 1, or 2)
+    for i in 0..N do
+        assert(colors[i] * (colors[i] - 1) * (colors[i] - 2) == 0)
+    endfor
+
+    // Ensure adjacent nodes have different colors
+    for j in 0..M do
+        field u = edges[2*j]
+        field v = edges[2*j + 1]
+        assert(colors[u] != colors[v])  // Enforce proper 3-coloring
+    endfor
+
+    //Compute the hash of the graph structure
+    field[2] computed_hash = sha256(hash_input)
+
+    // Ensure prover used the correct graph
+    assert(computed_hash == stored_hash)
+
+    return 1  // Proof is valid
+}
