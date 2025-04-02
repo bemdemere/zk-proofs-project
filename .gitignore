@@ -1,12 +1,23 @@
 # Ignore virtual environments
-zkenv/
-.zkenv/
+zk_env/
+.zk_env/
 
 # Ignore common Python cache files
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
+
+# ZoKrates-generated files
+client/out.*
+client/out
+client/witness
+client/proof.json
+client/verification.key
+client/proving.key
+client/input.txt
+client/abi.json
+
 
 # Ignore log files
 *.log

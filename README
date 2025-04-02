@@ -41,56 +41,137 @@ zk-auth/
   - **Each node gets a valid color (0,1,2).**
   - **Adjacent nodes do not share the same color.**
 
-### **TODOs**
-**Move Zokrates logic to the client side to avoid sending coloring**
+# How to run this local simulator
 
-**Frontend (Web Interface)**
-- Build a **web-based login page** where users enter credentials and authenticate.
-- Allow users to **interact seamlessly** with the backend.
+The following explains how to run the zero-knowledge login simulator using `client.py` and ZoKrates within a Docker container.
 
-**Automated Testing & Deployment**
-- Add **unit tests** in the `test/` directory to validate proof generation & verification.
-- Deploy the server and frontend using **Docker/Kubernetes** for scalability.
+---
 
-## **How to Run the Project**
-### **1. Install Dependencies**
+## 1. Requirements
+
+- Docker installed
+- Python 3 installed (create 3.11 python environment (`zk_env`))
+- Terminal located in the project root (the directory containing `client.py` and `circuit_dynamic.zok`)
+
+---
+
+## 2. Overview
+
+The system performs the following steps:
+
+1. The client creates a 3-colorable graph based on a username, password, and salt.
+2. It generates circuit inputs and creates a witness.
+3. It generates a zk-SNARK proof.
+4. The server verifies the proof using public inputs.
+
+No sensitive data (e.g., passwords or graph coloring) is exposed.
+
+---
+
+## 3. Run Instructions
+
+### Step 1: Execute the Client Script
+
+Run the following command to generate the circuit and input data:
+
 ```bash
-pip install flask
+python3 client.py
 ```
 
-### **2. Start the Server**
+This script generates the following files:
+
+- `client/circuit_dynamic.zok`: The circuit source
+- `client/input.txt`: Circuit inputs for proof generation
+
+### Step 2: Start the ZoKrates Docker Container
+
+From the project root directory:
+
 ```bash
-python server/app.py
+docker run --rm -v $(pwd):/home/zokrates/code -w /home/zokrates/code -ti zokrates/zokrates
 ```
 
-### **3. Authenticate a User (Example)**
-Send a **POST request** to the server:
+You are now inside the ZoKrates container in the `/home/zokrates/code` directory.
+
+### Step 3: Compile the Circuit
+
+Only required once unless the circuit is modified:
+
 ```bash
-curl -X POST http://127.0.0.1:5000/login \
-     -H "Content-Type: application/json" \
-     -d '{
-         "username": "alice",
-         "colors": [0, 1, 2]
-     }'
+zokrates compile -i client/circuit_dynamic.zok
 ```
 
-### **4. Expected Output**
-If authentication is successful:
-```json
-{
-    "success": true,
-    "message": "Authentication successful (ZKP verified)!"
-}
-```
-If authentication fails:
-```json
-{
-    "success": false,
-    "message": "Authentication failed (invalid proof)!"
-}
+### Step 4: Compute the Witness
+
+Change into the client directory:
+
+```bash
+cd client/
 ```
 
-## **Next Steps**
-1. **Complete the frontend UI** for user authentication.
-2. **Enable client-side proof generation** for enhanced privacy.
-3. **Deploy on cloud infrastructure** and optimize for performance.
+Run the witness computation:
+
+```bash
+zokrates compute-witness -a $(cat input.txt)
+```
+
+This generates the `witness` file.
+
+### Step 5: Generate the Proof
+
+```bash
+zokrates generate-proof
+```
+
+This creates `proof.json`.
+
+### Step 6: Verify the Proof
+
+```bash
+zokrates verify
+```
+
+Expected output:
+
+```
+Performing verification...
+PASSED
+```
+
+---
+
+## 4. File Summary
+
+| File | Purpose |
+|------|---------|
+| `client.py` | Generates circuit inputs from user credentials |
+| `circuit_dynamic.zok` | The ZoKrates circuit code |
+| `input.txt` | Input data for ZoKrates CLI |
+| `witness` | Witness file for proof generation |
+| `proof.json` | zk-SNARK proof to be verified |
+
+---
+
+## 6. TODO: Refactor for Real User Signup and Login
+
+To separate the logic for user signup and login, divide the simulator into the following sections:
+
+### Signup (`register_user`)
+- Input: `username`, `password`, `salt`
+- Compute: hash preimage, graph, coloring
+- Output:
+  - `stored_hash` → stored on server
+  - `graph_edges` → stored on server
+- Save the user data in a database or JSON file
+
+### Login (`login_user`)
+- Input: `username`, `password`, `salt`
+- Reconstruct same preimage
+- Generate: input.txt, witness, proof.json
+- Send proof + public inputs to the server
+- Server verifies using `zokrates verify`
+
+### Flask API Endpoints
+- `/register`: Accepts user credentials and stores public data
+- `/login`: Accepts proof and public inputs, runs `zokrates verify`, and returns login status
+

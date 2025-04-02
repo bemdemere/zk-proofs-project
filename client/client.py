@@ -70,10 +70,98 @@ def is_3_colorable(G):
     # Get the number of unique colors used
     num_colors = len(set(coloring.values()))
     
-    # If the number of colors used is ≤ 3, the graph is 3-colorable
+    # If the number of colors used is <= 3, the graph is 3-colorable
     return num_colors <= 3, coloring
 
 print("\nChecking if Graph is 3-Colorable...")
 is_colorable, coloring = is_3_colorable(zk_inputs['graph'])
 print(f"Graph is 3-Colorable: {is_colorable}")
 print(f"Coloring: {coloring}")
+
+def str_to_field4(preimage: str) -> list:
+    """Converts a string to 512-bit padded input, split into 4 field elements."""
+    b = preimage.encode()
+    b = b.ljust(64, b'\x00')  # pad to 64 bytes (512 bits)
+    return [int.from_bytes(b[i:i+16], 'big') for i in range(0, 64, 16)]  # 4 × 128-bit chunks
+
+def str_to_field2(h: bytes) -> list:
+    """Returns SHA256 digest of bytes split into 2 field elements."""
+    return [
+        int.from_bytes(h[:16], 'big'),
+        int.from_bytes(h[16:], 'big')
+    ]
+
+def write_dynamic_circuit_and_inputs(zk_inputs):
+    colors = zk_inputs['coloring']
+    edges = zk_inputs['graph_edges']
+    user_hash = zk_inputs['user_hash']
+    graph_hash = zk_inputs['graph_hash']
+
+    N = len(colors)
+    M = len(edges)
+
+    #  Generate color checks
+    color_checks = "\n".join([
+        f"    assert(colors[{i}] * (colors[{i}] - 1) * (colors[{i}] - 2) == 0);"
+        for i in range(N)
+    ])
+
+    #  Generate edge checks
+    edge_checks = "\n".join([
+        f"    assert(colors[{u}] != colors[{v}]);"
+        for u, v in edges
+    ])
+
+    #  Circuit template with correct hash input size (field[4])
+    circuit_code = f"""
+import "hashes/sha256/512bitPacked" as sha256packed;
+
+def main(
+    private field[{N}] colors,
+    field[{M}][2] edges,
+    private field[4] hash_input,
+    field[2] stored_hash
+) {{
+{color_checks}
+
+{edge_checks}
+
+    field[2] computed_hash = sha256packed(hash_input);
+    assert(computed_hash[0] == stored_hash[0]);
+    assert(computed_hash[1] == stored_hash[1]);
+    return;
+}}
+""".strip()
+
+    with open("circuit_dynamic.zok", "w") as f:
+        f.write(circuit_code)
+    print(f"\nGenerated circuit_dynamic.zok with N={N}, M={M}")
+
+    #  Write input.txt
+    color_array = [colors[i] for i in sorted(colors)]
+    edge_array = [e for pair in edges for e in pair]  # flatten [M][2] into list of 2*M fields
+    
+    preimage = f"{username}:{password}:{salt}"
+    hash_input = str_to_field4(preimage)
+
+    padded_bytes = preimage.encode().ljust(64, b'\x00')
+    digest = hashlib.sha256(padded_bytes).digest()
+    stored_hash = str_to_field2(digest)
+
+
+    print(f"color_array: {len(color_array)}")
+    print(f"edge_array: {len(edge_array)}")
+    print(f"hash_input: {len(hash_input)}")
+    print(f"stored_hash: {len(stored_hash)}")
+
+    total_inputs = len(color_array + edge_array + hash_input + stored_hash)
+    print(f"TOTAL INPUTS: {total_inputs}")  # should be 60
+
+    all_inputs = color_array + edge_array + hash_input + stored_hash
+
+    with open("input.txt", "w") as f:
+        f.write(" ".join(map(str, all_inputs)) + "\n")
+    print(f"Wrote input.txt with {len(color_array)} colors and {len(edges)} edges")
+
+# Call this after running generate_zksnark_inputs
+write_dynamic_circuit_and_inputs(zk_inputs)

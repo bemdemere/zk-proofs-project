@@ -1,0 +1,49 @@
+import "hashes/sha256/512bitPacked" as sha256packed;
+
+def main(
+    private field[14] colors,
+    field[20][2] edges,
+    private field[4] hash_input,
+    field[2] stored_hash
+) {
+    assert(colors[0] * (colors[0] - 1) * (colors[0] - 2) == 0);
+    assert(colors[1] * (colors[1] - 1) * (colors[1] - 2) == 0);
+    assert(colors[2] * (colors[2] - 1) * (colors[2] - 2) == 0);
+    assert(colors[3] * (colors[3] - 1) * (colors[3] - 2) == 0);
+    assert(colors[4] * (colors[4] - 1) * (colors[4] - 2) == 0);
+    assert(colors[5] * (colors[5] - 1) * (colors[5] - 2) == 0);
+    assert(colors[6] * (colors[6] - 1) * (colors[6] - 2) == 0);
+    assert(colors[7] * (colors[7] - 1) * (colors[7] - 2) == 0);
+    assert(colors[8] * (colors[8] - 1) * (colors[8] - 2) == 0);
+    assert(colors[9] * (colors[9] - 1) * (colors[9] - 2) == 0);
+    assert(colors[10] * (colors[10] - 1) * (colors[10] - 2) == 0);
+    assert(colors[11] * (colors[11] - 1) * (colors[11] - 2) == 0);
+    assert(colors[12] * (colors[12] - 1) * (colors[12] - 2) == 0);
+    assert(colors[13] * (colors[13] - 1) * (colors[13] - 2) == 0);
+
+    assert(colors[0] != colors[11]);
+    assert(colors[11] != colors[7]);
+    assert(colors[11] != colors[10]);
+    assert(colors[1] != colors[3]);
+    assert(colors[1] != colors[7]);
+    assert(colors[1] != colors[9]);
+    assert(colors[1] != colors[10]);
+    assert(colors[1] != colors[12]);
+    assert(colors[1] != colors[13]);
+    assert(colors[3] != colors[4]);
+    assert(colors[3] != colors[7]);
+    assert(colors[3] != colors[8]);
+    assert(colors[7] != colors[2]);
+    assert(colors[7] != colors[9]);
+    assert(colors[9] != colors[5]);
+    assert(colors[12] != colors[4]);
+    assert(colors[12] != colors[5]);
+    assert(colors[12] != colors[6]);
+    assert(colors[13] != colors[5]);
+    assert(colors[13] != colors[8]);
+
+    field[2] computed_hash = sha256packed(hash_input);
+    assert(computed_hash[0] == stored_hash[0]);
+    assert(computed_hash[1] == stored_hash[1]);
+    return;
+}
