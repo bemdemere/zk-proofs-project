@@ -2,6 +2,11 @@
 zk_env/
 .zk_env/
 
+# Ignore zk files
+js_imp/zk/*
+js_imp/out.*
+js_imp/users.*
+
 # Ignore common Python cache files
 __pycache__/
 *.pyc
@@ -9,14 +14,14 @@ __pycache__/
 *.pyd
 
 # ZoKrates-generated files
-client/out.*
-client/out
-client/witness
-client/proof.json
-client/verification.key
-client/proving.key
-client/input.txt
-client/abi.json
+py_sym/client/out.*
+py_sym/client/out
+py_sym/client/witness
+py_sym/client/proof.json
+py_sym/client/verification.key
+py_sym/client/proving.key
+py_sym/client/input.txt
+py_sym/client/abi.json
 
 
 # Ignore log files
