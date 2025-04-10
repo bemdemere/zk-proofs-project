@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>ZK Login Client</title>
+  <script src="https://unpkg.com/zokrates-js@latest/umd.min.js"></script>
+</head>
+<body>
+  <h1>ZK Login (Client-Side Proof Generation)</h1>
+
+  <label>Username: <input type="text" id="username" /></label><br>
+  <label>Password: <input type="password" id="password" /></label><br><br>
+  
+  <button id="register">Register</button>
+  <button id="login">Login</button>
+  <pre id="output"></pre>
+
+<script>
+const salt = "random_salt";
+
+function getInputValues() {
+  return {
+    username: document.getElementById("username").value.trim(),
+    password: document.getElementById("password").value.trim()
+  };
+}
+
+function mulberry32(seed) {
+  return function () {
+    seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+    let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  }
+}
+
+function generateGraphFromSeed(seedHex) {
+  const seed = parseInt(seedHex.slice(0, 8), 16);
+  const rand = mulberry32(seed);
+  const N = 14;
+  const colors = Array.from({ length: N }, () => Math.floor(rand() * 3));
+  const edges = [];
+  for (let i = 0; i < N; i++) {
+    for (let j = i + 1; j < N; j++) {
+      if (colors[i] !== colors[j] && rand() < 0.4) {
+        edges.push([i, j]);
+        if (edges.length === 20) return { colors, edges };
+      }
+    }
+  }
+  while (edges.length < 20) edges.push([0, 0]);
+  return { colors, edges };
+}
+
+async function encodeToFieldArray512bits(preimage) {
+  const encoder = new TextEncoder();
+  const bytes = encoder.encode(preimage);
+  const padded = new Uint8Array(64);
+  padded.set(bytes.slice(0, 64));
+  const chunks = [];
+  for (let i = 0; i < 64; i += 16) {
+    const chunk = padded.slice(i, i + 16);
+    const hex = Array.from(chunk).map(b => b.toString(16).padStart(2, '0')).join('');
+    chunks.push(BigInt('0x' + hex));
+  }
+  return chunks;
+}
+
+async function sha256FieldPairFromFieldArray(fieldArray) {
+  const bytes = new Uint8Array(64);
+  fieldArray.forEach((field, i) => {
+    const hex = field.toString(16).padStart(32, '0');
+    hex.match(/.{2}/g).forEach((b, j) => {
+      bytes[i * 16 + j] = parseInt(b, 16);
+    });
+  });
+  const hash = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
+  return [
+    BigInt('0x' + Array.from(hash.slice(0, 16)).map(b => b.toString(16).padStart(2, '0')).join('')),
+    BigInt('0x' + Array.from(hash.slice(16)).map(b => b.toString(16).padStart(2, '0')).join(''))
+  ];
+}
+
+async function register() {
+  const { username, password } = getInputValues();
+  if (!username || !password) return alert("Fill both fields");
+
+  const userPre = `${username}:${password}:${salt}`;
+  const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(userPre));
+  const userHashHex = Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+  const { colors, edges } = generateGraphFromSeed(userHashHex);
+  const flatEdges = edges.map(([u, v]) => `${u}-${v}`).join(',');
+  const fullPreimage = `${username}:${password}:${salt}|${flatEdges}|${colors.join(',')}`;
+
+  const hashInput = await encodeToFieldArray512bits(fullPreimage);
+  const storedHash = await sha256FieldPairFromFieldArray(hashInput);
+
+  const res = await fetch("http://localhost:5000/register", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, stored_hash: storedHash.map(x => x.toString()) })
+  });
+
+  const text = await res.text();
+  document.getElementById("output").textContent = res.status === 409 ? "❌ User already exists" : text;
+}
+
+async function login() {
+  const { username, password } = getInputValues();
+  if (!username || !password) return alert("Fill both fields");
+
+  const zokratesProvider = await zokrates.initialize();
+  const program = new Uint8Array(await (await fetch("http://localhost:5000/zk/out")).arrayBuffer());
+  const abi = await (await fetch("http://localhost:5000/zk/abi.json")).json();
+  const provingKey = new Uint8Array(await (await fetch("http://localhost:5000/zk/proving.key")).arrayBuffer());
+
+  const userPre = `${username}:${password}:${salt}`;
+  const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(userPre));
+  const userHashHex = Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+  const { colors, edges } = generateGraphFromSeed(userHashHex);
+  const flatEdges = edges.map(([u, v]) => `${u}-${v}`).join(',');
+  const fullPreimage = `${username}:${password}:${salt}|${flatEdges}|${colors.join(',')}`;
+
+  const hashInput = await encodeToFieldArray512bits(fullPreimage);
+  const storedHash = await sha256FieldPairFromFieldArray(hashInput);
+  const inputs = [hashInput.map(x => x.toString()), storedHash.map(x => x.toString())];
+
+  const { witness } = zokratesProvider.computeWitness({ program, abi }, inputs);
+  const proof = zokratesProvider.generateProof(program, witness, provingKey);
+
+  const res = await fetch("http://localhost:5000/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, proof, inputs })
+  });
+
+  const result = await res.text();
+  document.getElementById("output").textContent = result;
+}
+
+document.getElementById("register").onclick = register;
+document.getElementById("login").onclick = login;
+</script>
+</body>
+</html>
