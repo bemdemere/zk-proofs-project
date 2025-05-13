@@ -4,20 +4,66 @@
   <meta charset="UTF-8" />
   <title>ZK Login Client</title>
   <script src="https://unpkg.com/zokrates-js@latest/umd.min.js"></script>
+
+  <!-- Preload zk-SNARK files to improve load performance -->
+  <link rel="preload" href="/zk/out" as="fetch" type="application/octet-stream" crossorigin="anonymous">
+  <link rel="preload" href="/zk/proving.key" as="fetch" type="application/octet-stream" crossorigin="anonymous">
+  <link rel="preload" href="/zk/abi.json" as="fetch" type="application/json" crossorigin="anonymous">
+  <style>
+    /* Basic styling for the page layout */
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: Arial, sans-serif;
+    }
+    .container {
+      display: flex;
+      height: 100vh;
+    }
+    .left-panel {
+      flex: 1;
+      padding: 20px;
+      box-sizing: border-box;
+      background-color: #f9f9f9;
+    }
+    .right-panel {
+      flex: 1;
+      border-left: 1px solid #ccc;
+    }
+    iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+  </style>
 </head>
 <body>
-  <h1>ZK Login (Client-Side Proof Generation)</h1>
 
-  <label>Username: <input type="text" id="username" /></label><br>
-  <label>Password: <input type="password" id="password" /></label><br><br>
-  
-  <button id="register">Register</button>
-  <button id="login">Login</button>
-  <pre id="output"></pre>
+  <div class="container">
+    <!-- Left Side: User input and actions -->
+    <div class="left-panel">
+      <h1>ZK Login (Client-Side Proof Generation)</h1>
+
+      <!-- Input fields for username and password -->
+      <label>Username: <input type="text" id="username" /></label><br>
+      <label>Password: <input type="password" id="password" /></label><br><br>
+
+      <!-- Buttons for registration and login -->
+      <button id="register">Register</button>
+      <button id="login">Login</button>
+      <pre id="output"></pre> <!-- Output area for messages -->
+    </div>
+
+    <!-- Right Side: Embedded Google Doc -->
+    <div class="right-panel"></div>
+      <iframe src="https://docs.google.com/document/d/1Kf1xT0Rxm2UQYDIFmjdGxsQjidJxQJAXmg7hxZv7tUk/preview"></iframe>
+    </div>
+  </div>
 
 <script>
-const salt = "random_salt";
+const salt = "random_salt"; // Salt value for hashing
 
+// Function to get input values from the form
 function getInputValues() {
   return {
     username: document.getElementById("username").value.trim(),
@@ -25,6 +71,7 @@ function getInputValues() {
   };
 }
 
+// Pseudo-random number generator based on a seed
 function mulberry32(seed) {
   return function () {
     seed |= 0; seed = seed + 0x6D2B79F5 | 0;
@@ -34,28 +81,30 @@ function mulberry32(seed) {
   }
 }
 
+// Generate a graph based on a seed
 function generateGraphFromSeed(seedHex) {
   const seed = parseInt(seedHex.slice(0, 8), 16);
   const rand = mulberry32(seed);
-  const N = 14;
-  const colors = Array.from({ length: N }, () => Math.floor(rand() * 3));
+  const N = 14; // Number of nodes
+  const colors = Array.from({ length: N }, () => Math.floor(rand() * 3)); // Assign random colors
   const edges = [];
   for (let i = 0; i < N; i++) {
     for (let j = i + 1; j < N; j++) {
-      if (colors[i] !== colors[j] && rand() < 0.4) {
+      if (colors[i] !== colors[j] && rand() < 0.4) { // Add edges based on random probability
         edges.push([i, j]);
-        if (edges.length === 20) return { colors, edges };
+        if (edges.length === 20) return { colors, edges }; // Limit to 20 edges
       }
     }
   }
-  while (edges.length < 20) edges.push([0, 0]);
+  while (edges.length < 20) edges.push([0, 0]); // Pad with dummy edges if needed
   return { colors, edges };
 }
 
+// Encode a string into a 512-bit field array
 async function encodeToFieldArray512bits(preimage) {
   const encoder = new TextEncoder();
   const bytes = encoder.encode(preimage);
-  const padded = new Uint8Array(64);
+  const padded = new Uint8Array(64); // Pad to 64 bytes
   padded.set(bytes.slice(0, 64));
   const chunks = [];
   for (let i = 0; i < 64; i += 16) {
@@ -66,6 +115,7 @@ async function encodeToFieldArray512bits(preimage) {
   return chunks;
 }
 
+// Compute SHA-256 hash and split into two field values
 async function sha256FieldPairFromFieldArray(fieldArray) {
   const bytes = new Uint8Array(64);
   fieldArray.forEach((field, i) => {
@@ -81,10 +131,14 @@ async function sha256FieldPairFromFieldArray(fieldArray) {
   ];
 }
 
+// Handle user registration
 async function register() {
   const { username, password } = getInputValues();
   if (!username || !password) return alert("Fill both fields");
 
+  const t0 = performance.now(); // Start timing
+
+  // Generate user-specific hash and graph
   const userPre = `${username}:${password}:${salt}`;
   const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(userPre));
   const userHashHex = Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
@@ -92,52 +146,108 @@ async function register() {
   const flatEdges = edges.map(([u, v]) => `${u}-${v}`).join(',');
   const fullPreimage = `${username}:${password}:${salt}|${flatEdges}|${colors.join(',')}`;
 
+  // Encode and hash the preimage
   const hashInput = await encodeToFieldArray512bits(fullPreimage);
   const storedHash = await sha256FieldPairFromFieldArray(hashInput);
 
-  const res = await fetch("http://localhost:5000/register", {
+  const t1 = performance.now(); // End timing
+
+  // Send registration data to the server
+  const res = await fetch("/register", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username, stored_hash: storedHash.map(x => x.toString()) })
+    body: JSON.stringify({
+      username,
+      stored_hash: storedHash.map(x => x.toString()),
+      metrics: {
+        event: "register",
+        client_start_ms: t0,
+        client_end_ms: t1,
+        client_duration_ms: (t1 - t0).toFixed(2)
+      }
+    })
   });
 
   const text = await res.text();
   document.getElementById("output").textContent = res.status === 409 ? "❌ User already exists" : text;
 }
 
+// Handle user login
 async function login() {
+  const loginButton = document.getElementById("login");
+  const output = document.getElementById("output");
+
   const { username, password } = getInputValues();
   if (!username || !password) return alert("Fill both fields");
 
-  const zokratesProvider = await zokrates.initialize();
-  const program = new Uint8Array(await (await fetch("http://localhost:5000/zk/out")).arrayBuffer());
-  const abi = await (await fetch("http://localhost:5000/zk/abi.json")).json();
-  const provingKey = new Uint8Array(await (await fetch("http://localhost:5000/zk/proving.key")).arrayBuffer());
+  const zokratesProvider = await zokrates.initialize(); // Initialize ZoKrates
+  try {
+    loginButton.disabled = true; // Disable button during login
+    output.textContent = "⏳ Waiting for login to complete...";    
+    
+    const fetchStart = performance.now(); // Start timing fetch
 
-  const userPre = `${username}:${password}:${salt}`;
-  const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(userPre));
-  const userHashHex = Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
-  const { colors, edges } = generateGraphFromSeed(userHashHex);
-  const flatEdges = edges.map(([u, v]) => `${u}-${v}`).join(',');
-  const fullPreimage = `${username}:${password}:${salt}|${flatEdges}|${colors.join(',')}`;
+    // Fetch zk-SNARK files
+    const program = new Uint8Array(await (await fetch("/zk/out", { mode: "cors" })).arrayBuffer());
+    const abi = await (await fetch("/zk/abi.json", { mode: "cors" })).json();
+    const provingKey = new Uint8Array(await (await fetch("/zk/proving.key", { mode: "cors" })).arrayBuffer());
 
-  const hashInput = await encodeToFieldArray512bits(fullPreimage);
-  const storedHash = await sha256FieldPairFromFieldArray(hashInput);
-  const inputs = [hashInput.map(x => x.toString()), storedHash.map(x => x.toString())];
+    const fetchEnd = performance.now(); // End timing fetch
 
-  const { witness } = zokratesProvider.computeWitness({ program, abi }, inputs);
-  const proof = zokratesProvider.generateProof(program, witness, provingKey);
+    if (!program || !abi || !provingKey) {
+      output.textContent = "❌ Error fetching zk-SNARK files";
+      return;
+    }
 
-  const res = await fetch("http://localhost:5000/login", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username, proof, inputs })
-  });
+    const proofStart = performance.now(); // Start timing proof generation
 
-  const result = await res.text();
-  document.getElementById("output").textContent = result;
+    // Generate user-specific hash and graph
+    const userPre = `${username}:${password}:${salt}`;
+    const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(userPre));
+    const userHashHex = Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+    const { colors, edges } = generateGraphFromSeed(userHashHex);
+    const flatEdges = edges.map(([u, v]) => `${u}-${v}`).join(',');
+    const fullPreimage = `${username}:${password}:${salt}|${flatEdges}|${colors.join(',')}`;
+
+    // Encode and hash the preimage
+    const hashInput = await encodeToFieldArray512bits(fullPreimage);
+    const storedHash = await sha256FieldPairFromFieldArray(hashInput);
+    const inputs = [hashInput.map(x => x.toString()), storedHash.map(x => x.toString())];
+
+    // Generate zk-SNARK proof
+    const { witness } = zokratesProvider.computeWitness({ program, abi }, inputs);
+    const proof = zokratesProvider.generateProof(program, witness, provingKey);
+
+    const proofEnd = performance.now(); // End timing proof generation
+
+    // Send login data to the server
+    const res = await fetch("/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username,
+        proof,
+        inputs,
+        metrics: {
+          event: "login",
+          fetch_duration_ms: (fetchEnd - fetchStart).toFixed(2),
+          proof_duration_ms: (proofEnd - proofStart).toFixed(2),
+          total_duration_ms: (proofEnd - fetchStart).toFixed(2)
+        }
+      })
+    });
+
+    const result = await res.text();
+    document.getElementById("output").textContent = result;
+  } catch (err) {
+    console.error("Login failed", err);
+    output.textContent = "❌ Login failed (see console)";
+  } finally {
+    loginButton.disabled = false; // Re-enable button
+  }
 }
 
+// Attach event handlers to buttons
 document.getElementById("register").onclick = register;
 document.getElementById("login").onclick = login;
 </script>
