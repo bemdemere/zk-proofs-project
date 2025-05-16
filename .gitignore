@@ -6,6 +6,11 @@ zk_env/
 js_imp/zk/*
 js_imp/out.*
 js_imp/users.*
+js_node_imp/zk/*
+js_node_imp/zk/abi.json
+js_node_imp/zk/proving.key
+js_node_imp/zk/out
+
 
 # Ignore common Python cache files
 __pycache__/
